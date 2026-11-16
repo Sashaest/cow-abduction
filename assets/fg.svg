@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+ <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#00ff88" stop-opacity=".95"/><stop offset="1" stop-color="#00ff88" stop-opacity=".15"/></linearGradient>
+ <linearGradient id="metal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef3fa"/><stop offset=".55" stop-color="#9aa6b8"/><stop offset="1" stop-color="#4a5466"/></linearGradient>
+ <radialGradient id="dome" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#d8fbff"/><stop offset="1" stop-color="#22c6e6"/></radialGradient>
+</defs>
+<polygon points="430,470 594,470 700,800 324,800" fill="url(#beam)"/>
+<g transform="translate(512,700) rotate(-12)">
+ <rect x="-90" y="-50" width="180" height="100" rx="22" fill="#fff"/>
+ <rect x="-40" y="-50" width="50" height="45" rx="12" fill="#111"/><rect x="35" y="0" width="40" height="40" rx="10" fill="#111"/>
+ <rect x="70" y="-85" width="80" height="70" rx="18" fill="#fff"/><rect x="110" y="-48" width="48" height="30" rx="10" fill="#ff9db0"/>
+ <circle cx="98" cy="-60" r="7" fill="#111"/>
+ <rect x="-75" y="45" width="22" height="45" rx="6" fill="#fff"/><rect x="45" y="45" width="22" height="45" rx="6" fill="#fff"/>
+</g>
+<ellipse cx="512" cy="440" rx="300" ry="78" fill="url(#metal)"/>
+<path d="M352 410 Q512 220 672 410 Z" fill="url(#dome)" opacity=".95"/>
+<circle cx="512" cy="350" r="40" fill="#6dff7a"/><ellipse cx="497" cy="350" rx="9" ry="13" fill="#111"/><ellipse cx="527" cy="350" rx="9" ry="13" fill="#111"/>
+<g fill="#00ff88">
+ <circle cx="262" cy="448" r="13"/><circle cx="332" cy="470" r="13"/><circle cx="412" cy="484" r="13"/><circle cx="512" cy="489" r="13"/><circle cx="612" cy="484" r="13"/><circle cx="692" cy="470" r="13"/><circle cx="762" cy="448" r="13"/>
+</g>
+</svg>

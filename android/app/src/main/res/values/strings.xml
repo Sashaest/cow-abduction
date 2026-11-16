@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Cow Abduction</string>
+    <string name="title_activity_main">Cow Abduction</string>
+    <string name="package_name">com.sashaest.cowabduction</string>
+    <string name="custom_url_scheme">com.sashaest.cowabduction</string>
+</resources>

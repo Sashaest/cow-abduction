@@ -1,0 +1,6 @@
+{
+  "appId": "com.sashaest.cowabduction",
+  "appName": "Cow Abduction",
+  "webDir": "www",
+  "android": { "backgroundColor": "#02030a" }
+}
