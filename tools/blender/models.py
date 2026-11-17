@@ -66,7 +66,7 @@ def ico(name, loc, scale, sub=1):
     bpy.context.collection.objects.unlink(o); return o
 def box(name, loc, size):
     bpy.ops.mesh.primitive_cube_add(size=1, location=loc); o = bpy.context.object; o.name = name; o.scale = size
-    bpy.ops.object.transform_apply(scale=True); bpy.context.collection.objects.unlink(o); return o
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True); bpy.context.collection.objects.unlink(o); return o
 def flat(o):
     if o.type == 'MESH':
         for p in o.data.polygons: p.use_smooth = False
@@ -79,59 +79,58 @@ def export(path, root, extra=()):
     for o in [root] + list(root.children_recursive): o.select_set(True); flat(o) if o.get('flat', True) else None
     bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True, export_yup=True, export_animations=False)
 
-# ================================================================ MUCCA (low-poly hard-edge)
+# ================================================================ MUCCA (low-poly a blocchi, dalla tavola di riferimento)
+def bsec(w, zt, zb, ch=0.1):
+    """Sezione squadrata con smussi (10 punti)."""
+    h = zt - zb; c = min(ch, h * 0.25)
+    half = [(0.0, zt), (w - c, zt), (w, zt - c), (w, zb + c), (w - c, zb)]
+    return half + [(0.0, zb)] + [(-x, z) for x, z in reversed(half[1:])]
 def build_cow(rootname='Cow'):
-    M = dict(body=mat('Body', hexc(0xF4EFE6), rough=0.7), spot=mat('Spots', hexc(0x17171C), rough=0.6),
-             pink=mat('Pink', hexc(0xF58FA8), rough=0.55), horn=mat('Horn', hexc(0xE9D9B4), rough=0.45),
-             hoof=mat('Hoof', hexc(0x2B211C), rough=0.6), eye=mat('Eye', hexc(0x0B0B10), rough=0.15),
-             glint=mat('Glint', (1, 1, 1), emit=(1, 1, 1), strength=2), bell=mat('Bell', hexc(0xFFC933), metal=1, rough=0.3))
+    M = dict(body=mat('Body', hexc(0xF2F0EC), rough=0.7), spot=mat('Spots', hexc(0x16161B), rough=0.6),
+             pink=mat('Pink', hexc(0xF2A99A), rough=0.55), horn=mat('Horn', hexc(0xE3C9A0), rough=0.45),
+             hoof=mat('Hoof', hexc(0x1E1A1A), rough=0.6), eye=mat('EyeWhite', hexc(0xFFFFFF), rough=0.25),
+             pupil=mat('Eye', hexc(0x0B0B10), rough=0.1), glint=mat('Glint', (1, 1, 1), emit=(1, 1, 1), strength=2),
+             bell=mat('Bell', hexc(0xFFC933), metal=1, rough=0.3))
     root = empty(rootname, (0, 0, 0))
-    # Torso: petto profondo, garrese alto, dorso leggermente insellato, ossa dell'anca evidenti
-    rings = [(-0.86, section(0.30, 1.36, 0.82)), (-0.6, section(0.50, 1.50, 0.64)), (-0.2, section(0.58, 1.44, 0.55, sag=0.03)),
-             (0.25, section(0.6, 1.43, 0.58, sag=0.04)), (0.62, section(0.56, 1.50, 0.72)), (0.92, section(0.38, 1.42, 0.92))]
+    rings = [(-0.82, bsec(0.36, 1.42, 0.78, 0.14)), (-0.55, bsec(0.47, 1.5, 0.64, 0.12)), (0.0, bsec(0.5, 1.48, 0.6, 0.12)),
+             (0.55, bsec(0.48, 1.5, 0.66, 0.12)), (0.88, bsec(0.4, 1.46, 0.8, 0.14))]
     body = link(loft('BodyMesh', rings), root, (M['body'], M['spot']))
-    assign_by(body, 1, lambda c, p: noise.noise(Vector((c.x * 2.4 + 1.3, c.y * 2.0 + 7.7, c.z * 2.4 + 2.2))) > 0.08)
-    # Testa (pivot sul collo): cranio stretto, muso largo e piatto
+    def spot(c, p):  # macchie grandi e decise come nella tavola
+        x, y, z = c
+        return (y < -0.35 and z > 1.0) or (0.05 < y < 0.6 and x > 0.2 and z > 0.9) or (0.35 < y and x < -0.2 and z > 1.05) or (-0.3 < y < 0.15 and x < -0.2 and z < 1.0) or (0.6 < y and z > 1.2 and abs(x) < 0.25)
+    assign_by(body, 1, lambda c, p: spot(c, p))
     head = empty('Head', (0, -0.72, 1.3), root)
-    hr = [(-0.7, [(0, 1.5), (0.2, 1.42), (0.26, 1.22), (0.18, 1.06), (0, 1.02), (-0.18, 1.06), (-0.26, 1.22), (-0.2, 1.42)]),
-          (-1.0, [(0, 1.66), (0.26, 1.58), (0.32, 1.3), (0.22, 1.08), (0, 1.04), (-0.22, 1.08), (-0.32, 1.3), (-0.26, 1.58)]),
-          (-1.28, [(0, 1.56), (0.22, 1.5), (0.27, 1.24), (0.24, 1.0), (0, 0.96), (-0.24, 1.0), (-0.27, 1.24), (-0.22, 1.5)]),
-          (-1.42, [(0, 1.22), (0.25, 1.2), (0.3, 1.06), (0.26, 0.92), (0, 0.88), (-0.26, 0.92), (-0.3, 1.06), (-0.25, 1.2)]),
-          (-1.5, [(0, 1.16), (0.2, 1.15), (0.24, 1.05), (0.21, 0.94), (0, 0.92), (-0.21, 0.94), (-0.24, 1.05), (-0.2, 1.15)])]
-    skull = link(loft('Skull', hr), head, (M['body'], M['pink'], M['spot']))
-    assign_by(skull, 1, lambda c, p: c.y < -1.33)
-    assign_by(skull, 2, lambda c, p: c.y > -1.25 and c.x > 0.05 and c.z > 1.25)  # macchia su un occhio
+    hr = [(-0.72, bsec(0.3, 1.55, 1.0, 0.1)), (-0.9, bsec(0.36, 1.7, 0.98, 0.12)), (-1.22, bsec(0.35, 1.68, 1.02, 0.12)), (-1.3, bsec(0.3, 1.5, 1.0, 0.1))]
+    skull = link(loft('Skull', hr), head, (M['body'], M['spot']))
+    assign_by(skull, 1, lambda c, p: c.x > 0.05 and c.z > 1.2 and c.y > -1.28)
+    link(loft('Muzzle', [(-1.24, bsec(0.3, 1.24, 0.92, 0.1)), (-1.44, bsec(0.28, 1.2, 0.94, 0.12))]), head, (M['pink'],))
     for s in (-1, 1):
-        link(ico(f'Nostril{s}', (s * 0.1, -1.505, 1.06), (0.04, 0.02, 0.05), 1), head, (M['spot'],))
-        link(ico(f'Eye{s}', (s * 0.255, -1.2, 1.38), (0.07, 0.07, 0.085), 1), head, (M['eye'],))
-        link(ico(f'Glint{s}', (s * 0.29, -1.24, 1.41), (0.018, 0.018, 0.018), 1), head, (M['glint'],))
-        ear = link(mesh_from(f'Ear{s}', [(s * 0.28, -0.95, 1.5), (s * 0.62, -0.98, 1.44), (s * 0.3, -0.92, 1.36), (s * 0.3, -1.02, 1.44)],
-                             [(0, 1, 2), (0, 3, 1), (1, 3, 2), (0, 2, 3)]), head, (M['body'],))
-        link(prism(f'Horn{s}', (s * 0.2, -0.98, 1.6), (s * 0.36, -0.98, 1.8), 0.055, 0.012, 5), head, (M['horn'],))
-    # Zampe articolate (pivot all'anca), garretti posteriori piegati
-    for name, x, y, back in (('LegFL', -0.3, -0.5, 0), ('LegFR', 0.3, -0.5, 0), ('LegBL', -0.3, 0.55, 1), ('LegBR', 0.3, 0.55, 1)):
+        link(ico(f'Nostril{s}', (s * 0.1, -1.445, 1.08), (0.035, 0.015, 0.045), 1), head, (M['spot'],))
+        link(ico(f'EyeW{s}', (s * 0.24, -1.2, 1.46), (0.12, 0.1, 0.13), 2), head, (M['eye'],))
+        link(ico(f'Pupil{s}', (s * 0.27, -1.27, 1.45), (0.06, 0.05, 0.07), 2), head, (M['pupil'],))
+        link(ico(f'Glint{s}', (s * 0.265, -1.31, 1.49), (0.018, 0.01, 0.018), 1), head, (M['glint'],))
+        link(box(f'Ear{s}', (s * 0.48, -0.95, 1.58), (0.26, 0.08, 0.13)), head, (M['body'],)).rotation_euler = (0, s * -0.25, 0)
+        link(prism(f'Horn{s}', (s * 0.22, -0.95, 1.66), (s * 0.3, -0.95, 1.88), 0.06, 0.025, 5), head, (M['horn'],))
+    for name, x, y in (('LegFL', -0.3, -0.5), ('LegFR', 0.3, -0.5), ('LegBL', -0.3, 0.6), ('LegBR', 0.3, 0.6)):
         leg = empty(name, (x, y, 0.9), root)
-        knee = (x, y + (0.1 if back else -0.02), 0.45)
-        link(prism(name + 'Up', (x, y, 0.95), knee, 0.15 if back else 0.13, 0.085), leg, (M['body'],))
-        link(prism(name + 'Lo', knee, (x, y + (0.02 if back else 0), 0.14), 0.085, 0.08), leg, (M['body'],))
-        link(prism(name + 'Hoof', (x, y, 0.15), (x, y - 0.02, 0.0), 0.1, 0.11), leg, (M['hoof'],))
-    link(ico('Udder', (0, 0.36, 0.62), (0.2, 0.2, 0.12), 1), root, (M['pink'],))
-    for i, (x, y) in enumerate([(-0.07, 0.3), (0.07, 0.3), (-0.07, 0.42), (0.07, 0.42)]):
-        link(prism(f'Teat{i}', (x, y, 0.55), (x, y, 0.45), 0.025, 0.02, 4), root, (M['pink'],))
-    tail = empty('Tail', (0, 0.93, 1.3), root)
-    link(prism('TailMesh', (0, 0.93, 1.3), (0, 1.02, 0.78), 0.035, 0.025, 4), tail, (M['body'],))
-    link(ico('TailTuft', (0, 1.03, 0.68), (0.07, 0.07, 0.12), 1), tail, (M['spot'],))
-    link(ico('Bell', (0, -0.86, 0.84), (0.08, 0.08, 0.09), 1), root, (M['bell'],))
-    # Accessori opzionali
+        link(prism(name + 'Mesh', (x, y, 0.95), (x, y, 0.13), 0.13, 0.11, 4), leg, (M['body'],))
+        link(prism(name + 'Hoof', (x, y, 0.15), (x, y, 0.0), 0.12, 0.125, 4), leg, (M['hoof'],))
+    link(box('Udder', (0, 0.4, 0.6), (0.36, 0.34, 0.16)), root, (M['pink'],))
+    for i, (x, y) in enumerate([(-0.09, 0.32), (0.09, 0.32), (-0.09, 0.48), (0.09, 0.48)]):
+        link(prism(f'Teat{i}', (x, y, 0.53), (x, y, 0.44), 0.03, 0.022, 4), root, (M['pink'],))
+    tail = empty('Tail', (0, 0.9, 1.4), root)
+    link(prism('TailMesh', (0, 0.9, 1.4), (0, 1.02, 0.8), 0.035, 0.03, 4), tail, (M['body'],))
+    link(prism('TailTuft', (0, 1.02, 0.84), (0, 1.04, 0.62), 0.08, 0.03, 4), tail, (M['spot'],))
+    link(box('Bell', (0, -0.86, 0.82), (0.14, 0.14, 0.14)), root, (M['bell'],))
     laser = mat('Laser', hexc(0xFF0033), emit=hexc(0xFF0033), strength=8); steel = mat('Steel', hexc(0x7A8394), metal=1, rough=0.35)
-    acy = empty('Acc_Cyborg', (0, -1.1, 1.4), head)
-    link(box('Visor', (0, -1.27, 1.39), (0.6, 0.06, 0.1)), acy, (laser,))
-    link(prism('Antenna', (0.15, -1.0, 1.62), (0.15, -1.0, 1.95), 0.015, 0.012, 4), acy, (steel,))
-    link(ico('AntennaBulb', (0.15, -1.0, 1.98), (0.045, 0.045, 0.045), 1), acy, (laser,))
+    acy = empty('Acc_Cyborg', (0, -1.1, 1.45), head)
+    link(box('Visor', (0, -1.3, 1.46), (0.74, 0.06, 0.12)), acy, (laser,))
+    link(prism('Antenna', (0.15, -1.0, 1.7), (0.15, -1.0, 2.02), 0.015, 0.012, 4), acy, (steel,))
+    link(ico('AntennaBulb', (0.15, -1.0, 2.05), (0.045, 0.045, 0.045), 1), acy, (laser,))
     abull = empty('Acc_Bull', (0, -1.0, 1.6), head)
     for s in (-1, 1):
-        link(prism(f'BullHorn{s}', (s * 0.24, -0.98, 1.6), (s * 0.62, -1.05, 1.72), 0.08, 0.03, 5), abull, (M['horn'],))
-    link(mesh_from('NoseRing', *ring_mesh((0, -1.52, 0.98), 0.07, 0.015)), abull, (M['bell'],))
+        link(prism(f'BullHorn{s}', (s * 0.3, -0.95, 1.66), (s * 0.7, -1.02, 1.8), 0.09, 0.03, 5), abull, (M['horn'],))
+    link(mesh_from('NoseRing', *ring_mesh((0, -1.46, 0.98), 0.07, 0.015)), abull, (M['bell'],))
     return root
 def ring_mesh(c, R, r, n=10, m=4, plane='xz'):
     verts, faces = [], []
@@ -160,43 +159,40 @@ def lathe(name, prof, N):
             faces.append((A + i, A + i + 1, B + i + 1, B + i))
     return mesh_from(name, verts, faces)
 def build_ufo():
-    hull = mat('Hull', hexc(0x566072), metal=0.75, rough=0.3); dark = mat('HullDark', hexc(0x1A1E26), metal=0.7, rough=0.45)
-    dome = mat('Dome', hexc(0x0A0D14), metal=0.5, rough=0.06); neon = mat('Neon', hexc(0x00FF88), emit=hexc(0x00FF88), strength=10)
-    led = mat('LED', hexc(0x00FF88), emit=hexc(0x00FF88), strength=12)
-    root = empty('UFO', (0, 0, 0))
-    prof = [(0.001, -0.3), (0.42, -0.3), (0.5, -0.36), (0.75, -0.36), (0.82, -0.26), (1.5, -0.17), (2.08, -0.02), (2.1, 0.02),
-            (1.75, 0.13), (1.15, 0.22), (0.95, 0.26), (0.92, 0.3)]
-    h = link(lathe('Hull', prof, 40), root, (hull, dark))
-    assign_by(h, 1, lambda c, p: c.z < -0.25)
-    # Cupola nera riflettente, bassa e sfaccettata
-    dprof = [(0.93, 0.29), (0.9, 0.5), (0.72, 0.72), (0.4, 0.84), (0.001, 0.87)]
-    link(lathe('Dome', dprof, 20), root, (dome,))
-    link(mesh_from('DomeNeon', *ring_mesh((0, 0, 0.33), 0.94, 0.025, 40, 4, 'xy')), root, (neon,))
-    # Anello neon sul bordo + emettitore sotto
-    link(mesh_from('NeonRim', *ring_mesh((0, 0, 0.0), 2.1, 0.03, 48, 4, 'xy')), root, (neon,))
-    link(mesh_from('Emitter', *ring_mesh((0, 0, -0.37), 0.62, 0.05, 32, 4, 'xy')), root, (neon,))
-    bpy.context.view_layer.update()
-    # 6 scanalature neon radiali sul dorso + 4 lame affilate
-    for i in range(6):
-        a = i / 6 * 2 * math.pi + math.pi / 6
-        s = link(box(f'Groove{i}', (0, 0, 0), (0.75, 0.035, 0.03)), root, (neon,))
-        s.rotation_euler = (0, math.radians(9), a); s.location = (1.45 * math.cos(a), 1.45 * math.sin(a), 0.185)
-    for i in range(4):
-        a = i / 4 * 2 * math.pi
-        bl = link(mesh_from(f'Blade{i}', [(1.9, -0.18, 0.0), (2.75, 0.0, -0.02), (1.9, 0.18, 0.0), (2.0, 0.0, 0.09), (2.0, 0.0, -0.08)],
-                            [(0, 3, 1), (1, 3, 2), (0, 1, 4), (1, 2, 4), (0, 4, 2), (0, 2, 3)]), root, (hull,))
-        bl.rotation_euler = (0, 0, a + math.pi / 4)
-        ln = link(box(f'BladeNeon{i}', (2.3, 0, 0.045), (0.7, 0.02, 0.015)), root, (neon,)); ln.rotation_euler = (0, 0, a + math.pi / 4)
-        bpy.context.view_layer.update()
-        ln.location = (2.3 * math.cos(a + math.pi / 4), 2.3 * math.sin(a + math.pi / 4), 0.045)
-    # 24 LED lungo il bordo (animati dal gioco)
+    """UFO dark sci-fi dalla tavola: disco a 12 facce a gradoni, 4 punte diagonali, anelli neon, emettitore grande."""
+    hull = mat('Hull', hexc(0x3A4150), metal=0.75, rough=0.32); dark = mat('HullDark', hexc(0x161A22), metal=0.7, rough=0.45)
+    dome = mat('Dome', hexc(0x232833), metal=0.7, rough=0.25); neon = mat('Neon', hexc(0x00FF88), emit=hexc(0x00FF88), strength=10)
+    led = mat('LED', hexc(0x00FF88), emit=hexc(0x00FF88), strength=12); glow = mat('Emitter', hexc(0x9DFFC9), emit=hexc(0x55FFAA), strength=14)
+    root = empty('UFO', (0, 0, 0)); N = 12
+    prof = [(0.001, -0.3), (0.82, -0.3), (0.95, -0.42), (1.6, -0.34), (2.05, -0.12), (2.12, 0.0), (2.06, 0.07), (1.58, 0.13),
+            (1.52, 0.24), (1.02, 0.3), (0.98, 0.42), (0.6, 0.5), (0.001, 0.52)]
+    h = link(lathe('Hull', prof, N), root, (hull, dark, dome))
+    assign_by(h, 1, lambda c, p: c.z < -0.2)
+    assign_by(h, 2, lambda c, p: c.z > 0.36)
+    def poly_ring(name, r, z, t, m):  # anello neon poligonale (12 lati)
+        bm_ = []
+        for i in range(N):
+            a0, a1 = i / N * 2 * math.pi, (i + 1) / N * 2 * math.pi
+            mid = (a0 + a1) / 2; L = 2 * r * math.sin(math.pi / N)
+            o = link(box(f'{name}{i:02d}', (r * math.cos(mid), r * math.sin(mid), z), (t, L + t, t)), root, (m,))
+            o.rotation_euler = (0, 0, mid); bm_.append(o)
+        return bm_
+    poly_ring('MidNeon', 1.53, 0.2, 0.05, neon)
+    poly_ring('HubNeon', 0.99, 0.38, 0.045, neon)
+    poly_ring('BandNeon', 1.85, -0.08, 0.05, neon)
+    # 24 segmenti LED sul bordo esterno (animati dal gioco)
     for i in range(24):
-        a = i / 24 * 2 * math.pi
-        l = link(box(f'LED{i:02d}', (1.98 * math.cos(a), 1.98 * math.sin(a), -0.06), (0.09, 0.09, 0.04)), root, (led,)); l.rotation_euler = (0, 0, a)
-    # 3 pod sotto
-    for i in range(3):
-        a = i / 3 * 2 * math.pi
-        link(prism(f'Pod{i}', (1.1 * math.cos(a), 1.1 * math.sin(a), -0.2), (1.15 * math.cos(a), 1.15 * math.sin(a), -0.36), 0.12, 0.07, 6), root, (dark,))
+        a = (i + 0.5) / 24 * 2 * math.pi; L = 2 * 2.13 * math.sin(math.pi / 24)
+        l = link(box(f'LED{i:02d}', (2.13 * math.cos(a), 2.13 * math.sin(a), 0.0), (0.06, L * 0.92, 0.07)), root, (led,)); l.rotation_euler = (0, 0, a)
+    # Emettitore inferiore grande e luminoso
+    bpy.ops.mesh.primitive_cylinder_add(vertices=N, radius=0.8, depth=0.04, location=(0, 0, -0.3)); em = bpy.context.object; em.name = 'Emitter'
+    bpy.context.collection.objects.unlink(em); link(em, root, (glow,))
+    # 4 punte diagonali affilate
+    for i in range(4):
+        a = i / 4 * 2 * math.pi + math.pi / 4
+        sp = link(mesh_from(f'Spike{i}', [(1.5, -0.14, -0.06), (1.5, 0.14, -0.06), (1.5, 0.0, 0.1), (1.5, 0.0, -0.18), (3.15, 0.0, -0.28)],
+                            [(0, 2, 4), (2, 1, 4), (1, 3, 4), (3, 0, 4), (0, 3, 1), (0, 1, 2)]), root, (dark,))
+        sp.rotation_euler = (0, 0, a)
     return root
 
 # ================================================================ VEICOLI (low-poly)
