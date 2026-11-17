@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#04050d">
+<link rel="icon" href="data:,">
+<title>Cow Abduction - Night Highway</title>
+<!--
+  COW ABDUCTION - NIGHT HIGHWAY
+  ==============================================================
+  Endless/level runner arcade 3D (Three.js) per web + Android (Capacitor).
+  Sezioni del codice:
+   1. CONFIG & DATI DI GIOCO      (costanti, settori, upgrade, skin, trofei, sfide)
+   2. SALVATAGGIO                 (localStorage, cuori, laboratorio idle)
+   3. AUDIO PROCEDURALE           (Web Audio API: raggio, moo, crash, musica synthwave)
+   4. THREE.JS SETUP & MONDO      (renderer, luci, strada, lampioni, alberi, meteo)
+   5. MODELLI 3D                  (UFO + skin, mucche, veicoli, meteore)
+   6. LOOP DI GIOCO               (spawn, abduction, collisioni, close call, panic fever)
+   7. UI / SCHERMATE              (menu, mappa, laboratorio, trofei, classifica, game over)
+   8. INPUT & MAIN LOOP           (tastiera, touch/swipe, back Android, rAF)
+-->
+<style>
+/* =====================================================================
+   STILE UI NEON-ARCADE
+   ===================================================================== */
+:root{
+  --neon:#00ff88; --cyan:#22e6ff; --pink:#ff2bd6; --gold:#ffd23f; --red:#ff3355;
+  --bg:rgba(7,9,24,.9); --line:rgba(0,255,136,.35);
+  --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#02030a;color:#e8fbff;
+  font-family:"Trebuchet MS",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+#game{position:fixed;inset:0}
+#game canvas{display:block;width:100%;height:100%}
+.layer{position:fixed;inset:0;pointer-events:none}
+.hidden{display:none!important}
+.title-font{font-family:"Arial Black","Trebuchet MS",sans-serif;letter-spacing:.06em}
+
+/* --- Effetti schermo --- */
+#flash{background:#fff;opacity:0;z-index:5;mix-blend-mode:screen}
+#dmg{background:radial-gradient(ellipse at center,rgba(255,0,40,0) 40%,rgba(255,0,40,.65) 100%);opacity:0;z-index:6}
+#vignette{background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(34,230,255,.35) 100%);opacity:0;z-index:6;transition:opacity .15s}
+#panicTint{background:radial-gradient(ellipse at center,rgba(255,0,40,0) 50%,rgba(255,0,60,.35) 100%);opacity:0;z-index:6;transition:opacity .4s}
+body.glitch #game{animation:glitch .25s steps(2) 6}
+@keyframes glitch{0%{transform:translate(0)}25%{transform:translate(-6px,2px);filter:hue-rotate(90deg)}50%{transform:translate(5px,-3px)}75%{transform:translate(-2px,4px);filter:hue-rotate(-90deg)}100%{transform:translate(0)}}
+
+/* --- HUD --- */
+#hud{z-index:10;padding:calc(10px + var(--safe-t)) 12px 0}
+.hud-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.hud-row>div{flex:none}
+.hud-row>div.mid{flex:1;min-width:0}
+#hudLeft{min-width:96px;white-space:nowrap}
+.hud-box{background:rgba(5,8,20,.55);border:1px solid var(--line);border-radius:12px;padding:6px 10px;
+  box-shadow:0 0 12px rgba(0,255,136,.15);backdrop-filter:blur(3px)}
+.hud-big{font-size:22px;font-weight:900;color:#fff;text-shadow:0 0 10px var(--cyan)}
+.hud-small{font-size:12px;opacity:.85}
+#hudCows{color:var(--neon);font-weight:900;font-size:18px;text-shadow:0 0 8px var(--neon)}
+#hudMult{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:8px;background:var(--pink);color:#fff;font-weight:900;font-size:14px;box-shadow:0 0 12px var(--pink)}
+#hudLives{font-size:18px;white-space:nowrap;color:var(--red);text-shadow:0 0 8px var(--red);text-align:right}
+#hudShields{font-size:14px;color:var(--cyan);text-align:right;min-height:18px}
+#progressWrap{margin:8px auto 0;width:100%;max-width:420px;height:8px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden;border:1px solid rgba(255,255,255,.15)}
+#progressBar{height:100%;width:0;background:linear-gradient(90deg,var(--neon),var(--cyan));box-shadow:0 0 10px var(--neon)}
+#hudGoal{text-align:center;font-size:12px;margin-top:3px;opacity:.9}
+#banner{position:fixed;left:50%;top:calc(110px + var(--safe-t));transform:translateX(-50%);font-weight:900;font-size:20px;
+  padding:6px 16px;border-radius:12px;width:max-content;max-width:92vw;opacity:0;transition:opacity .3s;z-index:11;text-align:center}
+#banner.show{opacity:1}
+#banner.panic{background:rgba(255,0,50,.25);border:1px solid var(--red);color:#fff;text-shadow:0 0 12px var(--red);animation:pulse .5s infinite alternate}
+#banner.info{background:rgba(34,230,255,.15);border:1px solid var(--cyan);color:#fff;text-shadow:0 0 10px var(--cyan)}
+@keyframes pulse{from{transform:translateX(-50%) scale(1)}to{transform:translateX(-50%) scale(1.07)}}
+#beamUI{position:fixed;left:50%;bottom:calc(150px + var(--safe-b));transform:translateX(-50%);width:200px;z-index:11;opacity:0;transition:opacity .15s;text-align:center}
+#beamUI.show{opacity:1}
+#beamBarWrap{height:10px;border-radius:6px;background:rgba(0,0,0,.5);border:1px solid var(--neon);overflow:hidden}
+#beamBar{height:100%;width:0;background:var(--neon);box-shadow:0 0 12px var(--neon)}
+#beamLabel{font-size:12px;font-weight:900;color:var(--neon);text-shadow:0 0 8px var(--neon);margin-bottom:3px}
+#beamUses{position:fixed;right:14px;bottom:calc(150px + var(--safe-b));z-index:11;font-weight:900;color:var(--neon)}
+#popups{position:fixed;inset:0;z-index:12;pointer-events:none;overflow:hidden}
+.pop{position:absolute;left:50%;transform:translate(-50%,0);font-weight:900;white-space:nowrap;animation:popUp 1.1s ease-out forwards;
+  text-shadow:0 0 12px currentColor}
+@keyframes popUp{0%{opacity:0;transform:translate(-50%,10px) scale(.6)}15%{opacity:1;transform:translate(-50%,0) scale(1.15)}100%{opacity:0;transform:translate(-50%,-70px) scale(1)}}
+#pauseBtn{pointer-events:auto;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:rgba(5,8,20,.6);color:#fff;font-size:18px;margin-top:6px;float:right}
+#countdown{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:96px;font-weight:900;color:#fff;
+  text-shadow:0 0 30px var(--neon);z-index:13;pointer-events:none}
+
+/* --- Controlli touch --- */
+#touch{position:fixed;left:0;right:0;bottom:0;z-index:12;display:none;justify-content:space-between;align-items:flex-end;
+  padding:0 14px calc(16px + var(--safe-b));pointer-events:none}
+body.touch #touch.on{display:flex}
+.tbtn{pointer-events:auto;width:78px;height:78px;border-radius:50%;border:2px solid var(--cyan);background:rgba(34,230,255,.12);
+  color:#fff;font-size:32px;font-weight:900;box-shadow:0 0 16px rgba(34,230,255,.4);display:flex;align-items:center;justify-content:center}
+.tbtn:active,.tbtn.down{background:rgba(34,230,255,.35)}
+#tAbduct{width:118px;height:118px;border-color:var(--neon);background:rgba(0,255,136,.14);box-shadow:0 0 22px rgba(0,255,136,.5);font-size:15px;letter-spacing:.05em}
+#tAbduct.down{background:rgba(0,255,136,.45)}
+
+/* --- Schermate / pannelli --- */
+.screen{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:20;pointer-events:auto;
+  background:radial-gradient(ellipse at 50% 30%,rgba(10,30,40,.35),rgba(2,3,10,.82));padding:calc(10px + var(--safe-t)) 10px calc(10px + var(--safe-b))}
+.screen.active{display:flex}
+.screen.clear{background:rgba(2,3,10,.35)}
+.panel{background:var(--bg);border:1px solid var(--line);border-radius:20px;padding:18px;width:min(560px,96vw);max-height:100%;overflow:auto;
+  box-shadow:0 0 30px rgba(0,255,136,.18),inset 0 0 40px rgba(34,230,255,.06);touch-action:pan-y}
+.panel h1,.panel h2{margin:0 0 10px;text-align:center}
+.panel h2{font-size:22px;color:var(--cyan);text-shadow:0 0 10px var(--cyan)}
+.logo{font-size:clamp(30px,9vw,52px);line-height:1;text-align:center;color:#fff;text-shadow:0 0 12px var(--neon),0 0 30px var(--neon);margin:4px 0}
+.logo small{display:block;font-size:.38em;color:var(--pink);text-shadow:0 0 10px var(--pink);letter-spacing:.3em;margin-top:6px}
+.btn{display:block;width:100%;margin:8px 0;padding:13px 14px;border-radius:14px;border:1px solid var(--neon);background:linear-gradient(180deg,rgba(0,255,136,.18),rgba(0,255,136,.05));
+  color:#fff;font-size:16px;font-weight:800;letter-spacing:.04em;cursor:pointer;text-shadow:0 0 8px rgba(0,255,136,.8);box-shadow:0 0 14px rgba(0,255,136,.2);font-family:inherit}
+.btn:active{transform:scale(.97)}
+.btn.alt{border-color:var(--cyan);background:linear-gradient(180deg,rgba(34,230,255,.16),rgba(34,230,255,.04));text-shadow:0 0 8px rgba(34,230,255,.8)}
+.btn.pink{border-color:var(--pink);background:linear-gradient(180deg,rgba(255,43,214,.2),rgba(255,43,214,.05));text-shadow:0 0 8px rgba(255,43,214,.8)}
+.btn.gold{border-color:var(--gold);background:linear-gradient(180deg,rgba(255,210,63,.22),rgba(255,210,63,.05));text-shadow:0 0 8px rgba(255,210,63,.8)}
+.btn.ghost{border-color:rgba(255,255,255,.3);background:transparent;text-shadow:none}
+.btn:disabled{opacity:.4;filter:grayscale(1)}
+.btn.sm{display:inline-block;width:auto;padding:8px 12px;font-size:13px;margin:4px 2px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}
+.stats{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin:6px 0 10px;font-size:14px}
+.stat b{color:var(--gold);text-shadow:0 0 8px var(--gold)}
+.card{border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:10px 12px;margin:8px 0;background:rgba(255,255,255,.03)}
+.card.done{border-color:var(--neon);box-shadow:0 0 10px rgba(0,255,136,.25)}
+.card.locked{opacity:.45}
+.card h3{margin:0 0 4px;font-size:15px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.muted{opacity:.7;font-size:12px}
+.tabs{display:flex;gap:6px;margin-bottom:8px}
+.tab{flex:1;padding:9px 4px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#fff;font-weight:800;font-family:inherit;font-size:13px}
+.tab.on{border-color:var(--cyan);background:rgba(34,230,255,.18);box-shadow:0 0 10px rgba(34,230,255,.3)}
+.pips{display:inline-flex;gap:3px}
+.pip{width:12px;height:6px;border-radius:2px;background:rgba(255,255,255,.18)}
+.pip.on{background:var(--neon);box-shadow:0 0 6px var(--neon)}
+.fence{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:6px 0}
+.pen{height:34px;border-radius:6px;border:1px dashed rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden}
+.pen.full{border-style:solid;border-color:var(--neon);background:rgba(0,255,136,.12)}
+.lvls{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.lvl{padding:9px 0;border-radius:10px;border:1px solid var(--cyan);background:rgba(34,230,255,.1);color:#fff;font-weight:900;font-family:inherit;font-size:14px}
+.lvl.done{border-color:var(--neon);background:rgba(0,255,136,.18)}
+.lvl:disabled{opacity:.3}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.1);text-align:left}
+th{color:var(--cyan)}
+input[type=text]{width:100%;padding:10px;border-radius:10px;border:1px solid var(--cyan);background:rgba(0,0,0,.4);color:#fff;font-size:15px;font-family:inherit}
+.toggle{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+.badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:900;background:rgba(255,255,255,.12)}
+.badge.ok{background:var(--neon);color:#002}
+.badge.gold{background:var(--gold);color:#210}
+#topbar{display:flex;justify-content:space-between;align-items:center;font-weight:900;margin-bottom:6px;font-size:15px}
+#toasts{position:fixed;left:50%;top:calc(12px + var(--safe-t));transform:translateX(-50%);z-index:40;display:flex;flex-direction:column;gap:6px;pointer-events:none;width:min(420px,92vw)}
+.toast{background:rgba(8,10,28,.95);border:1px solid var(--gold);border-radius:12px;padding:9px 12px;box-shadow:0 0 18px rgba(255,210,63,.35);
+  animation:toastIn 3.2s ease forwards;font-size:14px}
+@keyframes toastIn{0%{opacity:0;transform:translateY(-20px)}10%{opacity:1;transform:none}85%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
+#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#02030a;z-index:100;color:var(--neon);font-weight:900}
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
+</script>
+</head>
+<body>
+<div id="loading"><div class="logo title-font">COW ABDUCTION<small>NIGHT HIGHWAY</small></div><p>Caricamento…</p></div>
+<div id="game"></div>
+<div id="flash" class="layer"></div>
+<div id="dmg" class="layer"></div>
+<div id="vignette" class="layer"></div>
+<div id="panicTint" class="layer"></div>
+
+<!-- HUD di gioco -->
+<div id="hud" class="layer hidden">
+  <div class="hud-row">
+    <div class="hud-box" id="hudLeft">
+      <div class="hud-big" id="hudScore">0</div>
+      <div><span id="hudCows">🐄 0</span><span id="hudMult" class="hidden">x1</span></div>
+    </div>
+    <div class="mid">
+      <div id="progressWrap"><div id="progressBar"></div></div>
+      <div id="hudGoal"></div>
+    </div>
+    <div>
+      <div class="hud-box">
+        <div id="hudLives">♥♥♥</div>
+        <div id="hudShields"></div>
+      </div>
+      <button id="pauseBtn" data-act="pause" aria-label="Pausa">❚❚</button>
+    </div>
+  </div>
+</div>
+<div id="banner"></div>
+<div id="beamUI"><div id="beamLabel">ABDUCTION</div><div id="beamBarWrap"><div id="beamBar"></div></div></div>
+<div id="beamUses" class="hidden"></div>
+<div id="popups"></div>
+<div id="countdown" class="hidden"></div>
+
+<!-- Controlli touch (mobile) -->
+<div id="touch">
+  <button class="tbtn" id="tLeft" aria-label="Sinistra">◀</button>
+  <button class="tbtn" id="tAbduct" aria-label="Abduct">ABDUCT</button>
+  <button class="tbtn" id="tRight" aria-label="Destra">▶</button>
+</div>
+
+<!-- Schermate (contenuto generato via JS) -->
+<div class="screen" id="scr-menu"><div class="panel" id="pnl-menu"></div></div>
+<div class="screen" id="scr-map"><div class="panel" id="pnl-map"></div></div>
+<div class="screen" id="scr-lab"><div class="panel" id="pnl-lab"></div></div>
+<div class="screen" id="scr-trophies"><div class="panel" id="pnl-trophies"></div></div>
+<div class="screen" id="scr-leader"><div class="panel" id="pnl-leader"></div></div>
+<div class="screen" id="scr-daily"><div class="panel" id="pnl-daily"></div></div>
+<div class="screen" id="scr-settings"><div class="panel" id="pnl-settings"></div></div>
+<div class="screen clear" id="scr-pause"><div class="panel" id="pnl-pause"></div></div>
+<div class="screen" id="scr-over"><div class="panel" id="pnl-over"></div></div>
+<div class="screen" id="scr-modal"><div class="panel" id="pnl-modal"></div></div>
+<div id="toasts"></div>
+
+<script type="module">

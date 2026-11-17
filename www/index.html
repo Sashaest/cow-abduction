@@ -152,7 +152,7 @@ input[type=text]{width:100%;padding:10px;border-radius:10px;border:1px solid var
 #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#02030a;z-index:100;color:var(--neon);font-weight:900}
 </style>
 <script type="importmap">
-{ "imports": { "three": "./vendor/three.module.js" } }
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
 </script>
 </head>
 <body>
@@ -211,6 +211,11 @@ input[type=text]{width:100%;padding:10px;border-radius:10px;border:1px solid var
 
 <script type="module">
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /* =====================================================================
    1. CONFIG & DATI DI GIOCO
@@ -265,12 +270,12 @@ const UPGRADES = {
 };
 
 const UFO_SKINS = {
-  classic: { name: 'Classico',            body: 0xb8c2d0, dome: 0x66e0ff, led: 0x00ff88, shape: 'disc',  how: 'Base' },
-  retro:   { name: "UFO Retrò anni '50",  body: 0xd9d9d9, dome: 0xff4466, led: 0xff3355, shape: 'retro', how: 'Completa Praterie Terrestri' },
+  classic: { name: 'Predatore Notturno',  body: 0x8494aa, dome: 0x66e0ff, led: 0x00ff88, shape: 'disc',  how: 'Base' },
+  retro:   { name: "UFO Retrò anni '50",  body: 0xc8ccd4, dome: 0xff4466, led: 0xff3355, shape: 'retro', how: 'Completa Praterie Terrestri' },
   gold:    { name: "Disco d'Oro",         body: 0xffc93a, dome: 0xfff2b0, led: 0xffffff, shape: 'disc',  how: 'Completa Laboratorio Genetico', metal: true },
   cube:    { name: 'Astronave Cubica',    body: 0x2a3240, dome: 0x22e6ff, led: 0x22e6ff, shape: 'cube',  how: 'Completa Area Saggi' },
   queen:   { name: 'Corona della Regina', body: 0x7a3cff, dome: 0xff9bf0, led: 0xff2bd6, shape: 'queen', how: 'Completa Sala Trono della Regina' },
-  prism:   { name: 'Prisma Dimensionale', body: 0x20242e, dome: 0xffffff, led: 0xffffff, shape: 'prism', how: 'Completa Portale Dimensionale', rainbow: true },
+  prism:   { name: 'Prisma Dimensionale', body: 0x2a2f3a, dome: 0xffffff, led: 0xffffff, shape: 'prism', how: 'Completa Portale Dimensionale', rainbow: true },
 };
 
 /* Skin delle mucche ottenibili con gli incroci genetici (personaggi originali) */
@@ -607,9 +612,19 @@ const SKY = new THREE.Color(0x060818);
 scene.background = SKY.clone();
 scene.fog = new THREE.Fog(0x070a1c, 30, 170);
 
+/* --- Bloom selettivo (solo luci molto intense: neon, fari, raggio) --- */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.75, 0.4, 0.86);
+composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
+const bloomOn = () => S.settings.quality === 'high';
+function doRender() { if (bloomOn()) composer.render(); else renderer.render(scene, camera); }
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h); camera.aspect = w / h;
+  composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h);
+  bloomPass.resolution.set(w / 2, h / 2);
   // In verticale allarghiamo il FOV per vedere tutte e 3 le corsie
   camera.fov = w / h < 0.8 ? 74 : 62;
   camera.updateProjectionMatrix();
@@ -663,7 +678,7 @@ const roadLines = (g, w, h, linesOnly) => {
 };
 const roadTex = canvasTex(256, 256, (g, w, h) => roadLines(g, w, h, false), ROAD_L / ROAD_TILE);
 const roadEmi = canvasTex(256, 256, (g, w, h) => roadLines(g, w, h, true), ROAD_L / ROAD_TILE);
-const roadMat = new THREE.MeshStandardMaterial({ map: roadTex, emissiveMap: roadEmi, emissive: 0xffffff, emissiveIntensity: 0.42, roughness: 0.55, metalness: 0.15 });
+const roadMat = new THREE.MeshStandardMaterial({ map: roadTex, emissiveMap: roadEmi, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.55, metalness: 0.15 });
 const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, ROAD_L), roadMat);
 road.rotation.x = -Math.PI / 2; road.position.set(0, 0, 20 - ROAD_L / 2); scene.add(road);
 
@@ -676,9 +691,9 @@ const grass = new THREE.Mesh(new THREE.PlaneGeometry(200, ROAD_L), new THREE.Mes
 grass.rotation.x = -Math.PI / 2; grass.position.set(0, -0.03, 20 - ROAD_L / 2); scene.add(grass);
 
 /* --- Luna e stelle --- */
-const moon = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 16), new THREE.MeshBasicMaterial({ color: 0xe6eeff, fog: false }));
+const moon = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 16), new THREE.MeshBasicMaterial({ color: 0x9aa6c4, fog: false }));
 moon.position.set(-60, 70, -300); scene.add(moon);
-const moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x8fb0ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, fog: false, depthWrite: false }));
+const moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x8fb0ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, fog: false, depthWrite: false }));
 moonGlow.scale.set(60, 60, 1); moonGlow.position.copy(moon.position); scene.add(moonGlow);
 {
   const N = 1400, pos = new Float32Array(N * 3);
@@ -692,9 +707,9 @@ const SPAN = 360; // lunghezza del ciclo di riciclo
 const recycle = (z) => (z > 22 ? z - SPAN : z);
 const LAMP_COLOR = new THREE.Color(0xffc97a);
 const lampMats = {
-  head: new THREE.MeshStandardMaterial({ color: 0x222222, emissive: LAMP_COLOR.clone(), emissiveIntensity: 2.5 }),
-  cone: new THREE.MeshBasicMaterial({ color: LAMP_COLOR.clone(), transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
-  pool: new THREE.MeshBasicMaterial({ color: LAMP_COLOR.clone(), map: glowTex, transparent: true, opacity: 0.38, blending: THREE.AdditiveBlending, depthWrite: false }),
+  head: new THREE.MeshStandardMaterial({ color: 0x222222, emissive: LAMP_COLOR.clone(), emissiveIntensity: 1.5 }),
+  cone: new THREE.MeshBasicMaterial({ color: LAMP_COLOR.clone(), transparent: true, opacity: 0.03, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  pool: new THREE.MeshBasicMaterial({ color: LAMP_COLOR.clone(), map: glowTex, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }),
   pole: new THREE.MeshStandardMaterial({ color: 0x3a3f4a, metalness: 0.7, roughness: 0.4 }),
 };
 const lamps = [];
@@ -745,7 +760,7 @@ function updateInstances() {
 function scrollWorld(dz) {
   roadTex.offset.y += dz / ROAD_TILE; roadEmi.offset.y = roadTex.offset.y;
   grassTex.offset.y += dz / 8;
-  for (const l of lamps) { l.position.z += dz; if (l.position.z > 22) l.position.z -= SPAN; }
+  for (const l of lamps) { l.position.z += dz; if (l.position.z > 22) l.position.z -= SPAN; l.children[3].visible = l.position.z < -3; }
   for (const t of trees) { t.z = recycle(t.z + dz); }
   for (let i = 0; i < FENCE_N; i++) fenceZ[i] = recycle(fenceZ[i] + dz);
   updateInstances();
@@ -822,7 +837,7 @@ function glowSprite(color, size, opacity = 0.8) { const s = new THREE.Sprite(new
 
 /* ---------- UFO del giocatore (con skin) ---------- */
 const saucerProfile = (k = 1) => [[0, -0.38], [0.9, -0.34], [1.6, -0.12], [1.85 * k, 0.02], [1.65, 0.16], [1.05, 0.32], [0, 0.38]].map(p => new THREE.Vector2(p[0], p[1]));
-function buildUFO(skinId) {
+function buildUFOProc(skinId) {
   const sk = UFO_SKINS[skinId] || UFO_SKINS.classic;
   const g = new THREE.Group(); const leds = [];
   const bodyMat = new THREE.MeshStandardMaterial({ color: sk.body, metalness: sk.metal ? 1 : 0.85, roughness: sk.metal ? 0.18 : 0.28 });
@@ -871,12 +886,12 @@ const beamMat = new THREE.ShaderMaterial({
   fragmentShader: `uniform float uTime; uniform vec3 uColor; uniform float uI; varying vec2 vUv; varying vec3 vN; varying vec3 vV;
     void main(){ float fres=1.0-abs(dot(vN,vV)); float bands=0.55+0.45*sin(vUv.y*34.0+uTime*10.0);
       float fade=smoothstep(0.0,0.15,vUv.y)*smoothstep(1.0,0.75,vUv.y)*0.6+0.4*smoothstep(0.0,0.1,vUv.y);
-      float a=(0.12+0.75*pow(fres,1.6))*bands*fade*uI; gl_FragColor=vec4(uColor*(1.2+fres),a); }`,
+      float a=(0.07+0.5*pow(fres,1.6))*bands*fade*uI; gl_FragColor=vec4(uColor*(1.2+fres),a); }`,
   transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
 });
 const beamGeo = new THREE.CylinderGeometry(0.8, 1.7, 1, 36, 1, true).translate(0, -0.5, 0);
 const beam = new THREE.Mesh(beamGeo, beamMat); beam.visible = false; scene.add(beam);
-const beamCore = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.5, 1, 16, 1, true).translate(0, -0.5, 0), new THREE.MeshBasicMaterial({ color: 0x9fffd0, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }));
+const beamCore = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.5, 1, 16, 1, true).translate(0, -0.5, 0), new THREE.MeshBasicMaterial({ color: 0x9fffd0, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false }));
 beam.add(beamCore);
 const beamPool = new THREE.Mesh(new THREE.CircleGeometry(1.9, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x00ff88, map: glowTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
 beamPool.position.y = 0.04; scene.add(beamPool);
@@ -914,7 +929,7 @@ function cowMat(color, metal = false, emissive = 0x000000) {
   const k = `${color}_${metal}_${emissive}`;
   return cowMatCache[k] || (cowMatCache[k] = new THREE.MeshStandardMaterial({ color, roughness: metal ? 0.25 : 0.75, metalness: metal ? 0.9 : 0, emissive, emissiveIntensity: emissive ? 1.2 : 0 }));
 }
-function buildCow(type) {
+function buildCowProc(type) {
   const g = new THREE.Group(); const body = new THREE.Group(); g.add(body);
   let bodyMat, spotMat, acc = null;
   if (type === 'golden') { bodyMat = M.gold; spotMat = cowMat(0xfff3b0, true); }
@@ -961,8 +976,8 @@ function buildCow(type) {
 const CAR_COLORS = [0xc0392b, 0x2e86de, 0xf1c40f, 0xecf0f1, 0x27ae60, 0x8e44ad, 0xe67e22, 0x34495e, 0x16a085];
 const vMatCache = {};
 const vMat = (c) => vMatCache[c] || (vMatCache[c] = new THREE.MeshStandardMaterial({ color: c, metalness: 0.6, roughness: 0.35 }));
-function addLights(g, w, front, back, hy, withBeams) {
-  [-1, 1].forEach(s => { bx(M.headlight, 0.36, 0.18, 0.06, s * (w / 2 - 0.3), hy, front, g); bx(M.taillight, 0.36, 0.16, 0.06, s * (w / 2 - 0.3), hy, back, g); });
+function addLights(g, w, front, back, hy, withBeams, boxes = true) {
+  if (boxes) [-1, 1].forEach(s => { bx(M.headlight, 0.36, 0.18, 0.06, s * (w / 2 - 0.3), hy, front, g); bx(M.taillight, 0.36, 0.16, 0.06, s * (w / 2 - 0.3), hy, back, g); });
   const tg = glowSprite(0xff1020, 1.6, 0.7); tg.position.set(0, hy, back - 0.1); g.add(tg);
   const hg = glowSprite(0xfff6dd, 2.2, 0.6); hg.position.set(0, hy, front + 0.15); g.add(hg);
   if (withBeams) {
@@ -970,7 +985,7 @@ function addLights(g, w, front, back, hy, withBeams) {
     const pool = new THREE.Mesh(G_.pool, M.headPool); pool.scale.set(4, 1, 9); pool.position.set(0, 0.04 - 0, front + 5); g.add(pool);
   }
 }
-function buildVehicle(kind, oncoming) {
+function buildVehicleProc(kind, oncoming) {
   const g = new THREE.Group(); let len, w, h;
   if (kind === 'car') {
     const col = vMat(pick(CAR_COLORS)); len = 3.8; w = 1.8; h = 1.5;
@@ -1010,6 +1025,99 @@ function buildMeteor() {
   const tail = new THREE.Mesh(new THREE.ConeGeometry(0.8, 7, 10, 1, true).translate(0, 3.5, 0), new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
   g.add(tail); g.userData.tail = tail;
   return g;
+}
+
+/* =====================================================================
+   5b. MODELLI GLB (Blender) — con fallback procedurale se non caricabili
+   ===================================================================== */
+const MODELS = await (async () => {
+  const loader = new GLTFLoader(), names = ['ufo', 'cow', 'car', 'truck', 'tractor'], out = {};
+  try {
+    const res = await Promise.all(names.map(n => loader.loadAsync(`./models/${n}.glb`)));
+    names.forEach((n, i) => {
+      const sc = res[i].scene;
+      sc.traverse(o => { if (o.isMesh) { o.frustumCulled = true; const m = o.material; if (m && m.emissiveIntensity > 3) m.emissiveIntensity = /LED/.test(m.name) ? 3 : /Neon|Laser/.test(m.name) ? 2.4 : /Headlight/.test(m.name) ? 3 : /Taillight|Amber/.test(m.name) ? 2.5 : 2; } });
+      out[n] = sc;
+    });
+    return out;
+  } catch (e) { console.warn('Modelli GLB non caricati, uso i modelli procedurali', e); return null; }
+})();
+const nodeByName = (root, name) => { let r = null; root.traverse(o => { if (!r && o.name === name) r = o; }); return r; };
+const matVariant = {};
+function variantMat(base, key, props) {
+  const k = base.name + '|' + key;
+  if (!matVariant[k]) { const m = base.clone(); Object.entries(props).forEach(([p, v]) => { if (m[p] && m[p].isColor) m[p].setHex(v); else m[p] = v; }); matVariant[k] = m; }
+  return matVariant[k];
+}
+
+function buildUFO(skinId) {
+  const sk = UFO_SKINS[skinId] || UFO_SKINS.classic;
+  if (!MODELS || sk.shape === 'cube') return buildUFOProc(skinId);
+  const g = MODELS.ufo.clone(true); const leds = [];
+  g.traverse(o => {
+    if (!o.isMesh) return; const n = o.material.name;
+    if (n === 'Hull') o.material = variantMat(o.material, skinId, { color: sk.body, metalness: sk.metal ? 1 : 0.55, roughness: sk.metal ? 0.18 : 0.32, envMapIntensity: 1.6 });
+    else if (n === 'Dome') o.material = variantMat(o.material, skinId, { envMapIntensity: 2.2, roughness: 0.05 });
+    else if (n === 'Neon') o.material = variantMat(o.material, skinId, { color: sk.led, emissive: sk.led });
+    else if (n === 'LED') { o.material = o.material.clone(); o.material.color.setHex(sk.led); o.material.emissive.setHex(sk.led); leds.push(o); }
+  });
+  leds.sort((a, b) => a.name.localeCompare(b.name));
+  g.scale.setScalar(0.85);
+  const wrap = new THREE.Group(); wrap.add(g);
+  return { group: wrap, leds, sk, under: null };
+}
+
+function buildCow(type) {
+  if (!MODELS) return buildCowProc(type);
+  const g = MODELS.cow.clone(true);
+  const head = nodeByName(g, 'Head'), tail = nodeByName(g, 'Tail');
+  const legs = ['LegFL', 'LegFR', 'LegBL', 'LegBR'].map(n => nodeByName(g, n));
+  nodeByName(g, 'Acc_Cyborg').visible = type === 'cyborg';
+  nodeByName(g, 'Acc_Bull').visible = type === 'bull';
+  const bell = nodeByName(g, 'Bell'); if (bell) bell.visible = type === 'std' || type === 'golden';
+  const sk = COW_SKINS[S.cowSkin] || COW_SKINS.standard;
+  const look = type === 'golden' ? { Body: { color: 0xffc933, metalness: 1, roughness: 0.22, emissive: 0x8a5a00, emissiveIntensity: 0.9 }, Spots: { color: 0xffe9a0, metalness: 1, roughness: 0.18, emissive: 0x8a6a10, emissiveIntensity: 0.7 }, Horn: { color: 0xfff1b0, metalness: 1, roughness: 0.2 } }
+    : type === 'cyborg' ? { Body: { color: 0x8a93a3, metalness: 0.85, roughness: 0.3 }, Spots: { color: 0x2a2f3a, metalness: 0.7, roughness: 0.4 }, Pink: { color: 0x3a3f4a, metalness: 0.6, roughness: 0.4 } }
+    : type === 'bull' ? { Body: { color: 0x6a3a1c, emissive: 0x6a3a1c, emissiveIntensity: 0.12 }, Spots: { color: 0x24130a }, Pink: { color: 0x8a5a50 } }
+    : { Body: { color: sk.body, metalness: sk.metal ? 0.9 : 0, roughness: sk.metal ? 0.25 : 0.7, emissive: sk.body, emissiveIntensity: 0.14 }, Spots: { color: sk.spot, emissive: sk.glow || 0x000000, emissiveIntensity: sk.glow ? 1.4 : 0 }, Pink: { emissive: 0xf58fa8, emissiveIntensity: 0.12 } };
+  const key = type === 'std' ? 'std_' + S.cowSkin : type;
+  g.traverse(o => { if (o.isMesh && look[o.material.name]) o.material = variantMat(o.material, key, look[o.material.name]); });
+  const parts = { body: g, head, legs, tail, extra: [] };
+  const acc = type === 'std' ? sk.acc : null;
+  // Accessori delle skin, posizionati rispetto al perno della testa
+  if (acc === 'tophat') { bx(M.black, 0.5, 0.04, 0.5, 0, 0.38, 0.28, head); bx(M.black, 0.32, 0.4, 0.32, 0, 0.6, 0.28, head); const mono = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.018, 6, 16), M.gold); mono.position.set(0.29, 0.08, 0.48); mono.rotation.y = Math.PI / 2; head.add(mono); }
+  if (acc === 'visor') bx(cowMat(0x22e6ff, false, 0x22e6ff), 0.62, 0.1, 0.1, 0, 0.08, 0.52, head);
+  if (acc === 'bandage') { bx(M.white, 1.24, 0.12, 0.45, 0, 1.15, 0.25, g); bx(M.white, 1.24, 0.12, 0.45, 0, 1.0, -0.45, g); bx(M.white, 0.66, 0.1, 0.62, 0, 0.18, 0.4, head); }
+  if (acc === 'afro') { const a = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), cowMat(0x8a2be2, true)); a.scale.setScalar(0.4); a.position.set(0, 0.42, 0.25); head.add(a); }
+  if (acc === 'helmet') { const h = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), new THREE.MeshStandardMaterial({ color: 0xaaddff, transparent: true, opacity: 0.3, roughness: 0.05 })); h.scale.setScalar(0.62); h.position.set(0, 0.06, 0.42); head.add(h); }
+  if (acc === 'pirate') { bx(M.black, 0.7, 0.16, 0.5, 0, 0.4, 0.28, head); bx(M.black, 0.04, 0.14, 0.14, 0.29, 0.08, 0.48, head); }
+  if (acc === 'horn') { const h = new THREE.Mesh(G_.cone, M.gold); h.scale.set(0.07, 0.45, 0.07); h.position.set(0, 0.45, 0.5); h.rotation.x = 0.5; head.add(h); }
+  if (type === 'golden') { const h = glowSprite(0xffd23f, 4.2, 0.45); h.position.y = 1.1; g.add(h); parts.extra.push(h); }
+  if (type === 'cyborg') {
+    [-0.2, 0.2].forEach(x => { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 3.2, 5).rotateX(Math.PI / 2).translate(0, 0, 1.6), M.laserBeam); l.position.set(x, 0.08, 0.55); head.add(l); parts.extra.push(l); });
+    const red = glowSprite(0xff0033, 2.2, 0.45); red.position.set(0, 1.4, 1); g.add(red);
+  }
+  const wrap = new THREE.Group(); wrap.add(g); g.scale.setScalar(0.92);
+  return { group: wrap, parts };
+}
+
+function buildVehicle(kind, oncoming) {
+  if (!MODELS) return buildVehicleProc(kind, oncoming);
+  const g = MODELS[kind].clone(true);
+  const paint = kind === 'tractor' ? null : pick(kind === 'car' ? CAR_COLORS : [0xd35400, 0x2c3e50, 0xc0392b, 0x1e6091]);
+  const cargo = pick([0xdfe6e9, 0xb2bec3, 0x6c5ce7, 0xfdcb6e]);
+  g.traverse(o => { if (!o.isMesh) return; if (paint && o.material.name === 'Paint') o.material = variantMat(o.material, paint, { color: paint }); if (o.material.name === 'Cargo') o.material = variantMat(o.material, cargo, { color: cargo }); });
+  let len, w, h;
+  if (kind === 'car') { len = 3.9; w = 1.8; h = 1.45; addLights(g, w, 1.96, -1.96, 0.7, true, false); }
+  else if (kind === 'truck') { len = 9.55; w = 2.4; h = 4.0; addLights(g, 2.3, 4.8, -4.8, 0.9, true, false); }
+  else {
+    len = 3.2; w = 2.0; h = 2.95; addLights(g, 1.0, 1.6, -1.28, 1.05, true, false);
+    const bg = glowSprite(0xff8c00, 2.5, 0.7); bg.position.set(0, 2.86, -0.6); g.add(bg); g.userData.beacon = bg;
+  }
+  const wrap = new THREE.Group(); wrap.add(g);
+  if (g.userData.beacon) wrap.userData.beacon = g.userData.beacon;
+  wrap.rotation.y = oncoming ? 0 : Math.PI;
+  return { group: wrap, len, w, h };
 }
 
 /* =====================================================================
@@ -1829,11 +1937,11 @@ let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   const dtReal = Math.min(0.05, (now - last) / 1000); last = now;
-  if (G.state === 'paused' || G.freeze) { renderer.render(scene, camera); return; }
+  if (G.state === 'paused' || G.freeze) { doRender(); return; }
   if (G.state === 'menu') { G.scrollSpeed = 9; G.t += dtReal; scrollWorld(9 * dtReal); updateUFOVisual(dtReal, dtReal); updateAtmosphere(dtReal); updateCamera(dtReal); updateHazards(dtReal); }
   else if (G.state === 'over') { G.t += dtReal; updateUFOVisual(dtReal, dtReal); updateCamera(dtReal); }
   else updateGame(dtReal);
-  renderer.render(scene, camera);
+  doRender();
 }
 /* Timer del menu (cuori e silo) */
 setInterval(() => { if (currentScreen === 'menu' && G.state === 'menu' && heartsActive()) { const tb = document.querySelector('#topbar span:last-child'); if (tb) tb.innerHTML = heartsHTML(); } }, 1000);
@@ -1842,7 +1950,7 @@ camera.position.set(0, 7.4, 11.5);
 showScreen('menu');
 $('loading').remove();
 requestAnimationFrame(frame);
-window.__game = { G, get S() { return S; }, startRun, act, updateGame, cows, vehicles, spawnCow, spawnVehicle, setWeather, renderer, scene, camera, buildCow, beam, beamMat, beamPool, particles, updateParticles, get ufo() { return ufo; }, setUFOSkin, THREE }; // hook di debug/test
+window.__game = { G, get S() { return S; }, startRun, act, updateGame, cows, vehicles, spawnCow, spawnVehicle, setWeather, renderer, scene, camera, buildCow, buildVehicle, MODELS, doRender, bloomPass, beam, beamMat, beamPool, particles, updateParticles, get ufo() { return ufo; }, setUFOSkin, THREE }; // hook di debug/test
 </script>
 </body>
 </html>
