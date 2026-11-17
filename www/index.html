@@ -1829,7 +1829,7 @@ let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   const dtReal = Math.min(0.05, (now - last) / 1000); last = now;
-  if (G.state === 'paused') { renderer.render(scene, camera); return; }
+  if (G.state === 'paused' || G.freeze) { renderer.render(scene, camera); return; }
   if (G.state === 'menu') { G.scrollSpeed = 9; G.t += dtReal; scrollWorld(9 * dtReal); updateUFOVisual(dtReal, dtReal); updateAtmosphere(dtReal); updateCamera(dtReal); updateHazards(dtReal); }
   else if (G.state === 'over') { G.t += dtReal; updateUFOVisual(dtReal, dtReal); updateCamera(dtReal); }
   else updateGame(dtReal);
@@ -1842,7 +1842,7 @@ camera.position.set(0, 7.4, 11.5);
 showScreen('menu');
 $('loading').remove();
 requestAnimationFrame(frame);
-window.__game = { G, get S() { return S; }, startRun, act, updateGame, cows, vehicles, spawnCow, spawnVehicle, setWeather, renderer }; // hook di debug/test
+window.__game = { G, get S() { return S; }, startRun, act, updateGame, cows, vehicles, spawnCow, spawnVehicle, setWeather, renderer, scene, camera, buildCow, beam, beamMat, beamPool, particles, updateParticles, get ufo() { return ufo; }, setUFOSkin, THREE }; // hook di debug/test
 </script>
 </body>
 </html>
