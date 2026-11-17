@@ -33,7 +33,7 @@ Arcade 3D endless/level runner (Three.js) impacchettato per Android con Capacito
 
 ## Build
 Secret repo richiesti: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`.
-Push su `main` o "Run workflow" → Actions → artifact `cow-abduction-N` (`app-release.aab` per Play Console, `app-release.apk` per installazione diretta).
+"Run workflow" (manuale) o push di un tag `v*` → Actions → artifact `cow-abduction-N` (`app-release.aab` per Play Console, `app-release.apk` per installazione diretta).
 `versionCode` = numero run Actions (cresce da solo).
 
 ## Dev locale
