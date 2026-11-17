@@ -24,7 +24,7 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - uses: android-actions/setup-android@v3
+      # Android SDK già presente sui runner ubuntu-latest (ANDROID_HOME)
 
       - name: Install deps & sync web assets
         run: |
